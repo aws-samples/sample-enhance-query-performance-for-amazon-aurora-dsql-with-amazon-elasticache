@@ -8,6 +8,10 @@ import os
 import sys
 import logging
 import datetime
+import warnings
+
+# Suppress Python deprecation warnings from boto3
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='boto3')
 
 # Packages installed by quick_start.sh
 

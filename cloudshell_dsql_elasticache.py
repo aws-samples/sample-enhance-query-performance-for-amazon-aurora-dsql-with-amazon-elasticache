@@ -34,8 +34,12 @@ import time
 import logging
 import datetime
 import threading
+import warnings
 from typing import Optional, Tuple, Any, List
 from queue import Queue, Empty
+
+# Suppress Python deprecation warnings from boto3
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='boto3')
 
 # Packages installed by quick_start.sh
 
@@ -741,12 +745,11 @@ if __name__ == "__main__":
         else:
             # Error: Required configuration missing
             print(f"[ERROR] Missing required configuration!")
-            print(f"[ERROR] Please set environment variables or run quick_start.sh:")
-            print(f"[ERROR]   export AWS_REGION='your-region'")
-            print(f"[ERROR]   export DSQL_ENDPOINT='your-dsql-endpoint'")
-            print(f"[ERROR]   export VALKEY_ENDPOINT='your-valkey-endpoint'")
             print(f"[ERROR]")
-            print(f"[ERROR] Or run: ./quick_start.sh")
+            print(f"[ERROR] Please run the quick start script:")
+            print(f"[ERROR]   ./quick_start.sh")
+            print(f"[ERROR]")
+            print(f"[ERROR] The script will prompt for your endpoints and handle all setup automatically.")
             sys.exit(1)
     
     # Update CONFIG with the provided region
