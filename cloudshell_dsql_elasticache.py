@@ -39,7 +39,7 @@ from typing import Optional, Tuple, Any, List
 from queue import Queue, Empty
 
 # Suppress Python deprecation warnings from boto3
-warnings.filterwarnings('ignore', category=DeprecationWarning, module='boto3')
+warnings.filterwarnings('ignore', category=Warning)
 
 # Packages installed by quick_start.sh
 

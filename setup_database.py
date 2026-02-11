@@ -11,7 +11,7 @@ import datetime
 import warnings
 
 # Suppress Python deprecation warnings from boto3
-warnings.filterwarnings('ignore', category=DeprecationWarning, module='boto3')
+warnings.filterwarnings('ignore', category=Warning)
 
 # Packages installed by quick_start.sh
 
