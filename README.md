@@ -71,42 +71,28 @@ Follow the AWS documentation to create a CloudShell VPC environment: [Creating a
 
 ### Step 3: Get Service Endpoints and Clone Repository
 
-Once your CloudShell VPC environment is running, set up the environment variables and clone this repository:
+Once your CloudShell VPC environment is running, clone the repository:
 
 ```bash
-# Set environment variables from CloudFormation outputs
-export AWS_REGION="us-east-1" && \
-export DSQL_ENDPOINT=$(aws cloudformation describe-stacks --stack-name dsql-multi-region --region us-east-1 --query 'Stacks[0].Outputs[?OutputKey==`DSQLClusterEndpoint`].OutputValue' --output text) && \
-export VALKEY_ENDPOINT=$(aws cloudformation describe-stacks --stack-name dsql-multi-region --region us-east-1 --query 'Stacks[0].Outputs[?OutputKey==`ValkeyEndpoint`].OutputValue' --output text) && \
-echo "Environment Variables Set:" && \
-echo "AWS_REGION: $AWS_REGION" && \
-echo "DSQL_ENDPOINT: $DSQL_ENDPOINT" && \
-echo "VALKEY_ENDPOINT: $VALKEY_ENDPOINT"
-
 # Clone the repository
 git clone https://github.com/aws-samples/sample-boost-query-performance-for-amazon-aurora-dsql-with-amazon-elasticache.git
 cd sample-boost-query-performance-for-amazon-aurora-dsql-with-amazon-elasticache
 ```
 
-**Note:** If you deployed to a different region (e.g., `us-west-2`), replace `us-east-1` with your region in the commands above.
-
 You're now ready to run the Quick Start demo!
 
 ## Quick Start
-
-
 
 ### Option 1: Automated Demo (Recommended)
 ```bash
 ./quick_start.sh
 ```
 **What happens:**
-1. **Interactive Setup**: You'll be prompted once for your AWS configuration:
-   - AWS Region (e.g., us-east-1)
-   - Amazon Aurora DSQL cluster endpoint 
-   - Amazon ElastiCache (Valkey) endpoint
-2. **Automated Demo**: Complete performance demonstration runs automatically
-3. **Persistent Config**: Settings are saved as environment variables for subsequent runs
+1. **Configuration**: Prompts for AWS region, DSQL endpoint, and Valkey endpoint
+2. **Dependencies**: Installs Python packages and sets environment variables
+3. **Database Setup**: Creates and populates tables based on query type
+4. **Performance Test**: Runs complete demo with 3 scenarios
+5. **Results**: Shows performance comparison between DSQL and ElastiCache
 
 ### Option 2: Manual Steps
 ```bash

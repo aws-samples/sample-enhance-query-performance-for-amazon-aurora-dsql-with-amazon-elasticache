@@ -10,7 +10,7 @@ echo "=============================================="
 echo "Environment: AWS CloudShell"
 echo ""
 
-# Check if environment variables are already set (from CloudFormation or manual export)
+# Check if environment variables are already set
 if [[ -n "$AWS_REGION" && -n "$DSQL_ENDPOINT" && -n "$VALKEY_ENDPOINT" ]]; then
     echo "[DETECTED] Environment variables already set:"
     echo "  AWS_REGION: $AWS_REGION"
@@ -25,19 +25,7 @@ if [[ -n "$AWS_REGION" && -n "$DSQL_ENDPOINT" && -n "$VALKEY_ENDPOINT" ]]; then
     fi
 else
     SKIP_INPUT=false
-    echo "[INFO] Environment variables not detected. You can set them with:"
-    echo ""
-    echo "  export AWS_REGION='your-region'"
-    echo "  export DSQL_ENDPOINT='your-dsql-endpoint'"
-    echo "  export VALKEY_ENDPOINT='your-valkey-endpoint'"
-    echo ""
-    echo "Or retrieve them from CloudFormation:"
-    echo ""
-    echo "  export AWS_REGION='us-east-1'"
-    echo "  export DSQL_ENDPOINT=\$(aws cloudformation describe-stacks --stack-name dsql-multi-region --region us-east-1 --query 'Stacks[0].Outputs[?OutputKey==\`DSQLClusterEndpoint\`].OutputValue' --output text)"
-    echo "  export VALKEY_ENDPOINT=\$(aws cloudformation describe-stacks --stack-name dsql-multi-region --region us-east-1 --query 'Stacks[0].Outputs[?OutputKey==\`ValkeyEndpoint\`].OutputValue' --output text)"
-    echo ""
-    echo "Proceeding with interactive setup..."
+    echo "[INFO] Environment variables not set."
     echo ""
 fi
 
@@ -207,17 +195,31 @@ export VALKEY_TTL="30"
 export QUERY
 
 echo ""
-echo "[CONFIGURED] AWS Region: $AWS_REGION"
-echo "[CONFIGURED] DSQL Endpoint: $DSQL_ENDPOINT"
-echo "[CONFIGURED] Valkey Endpoint: $VALKEY_ENDPOINT"
-echo "[CONFIGURED] Database: postgres (admin user) - pre-configured"
-echo "[CONFIGURED] Cache TTL: $VALKEY_TTL seconds"
-echo "[CONFIGURED] Query Type: $QUERY_TYPE"
+echo "============================================================"
+echo "CONFIGURATION SUMMARY"
+echo "============================================================"
+echo "AWS Region:      $AWS_REGION"
+echo "DSQL Endpoint:   $DSQL_ENDPOINT"
+echo "Valkey Endpoint: $VALKEY_ENDPOINT"
+echo "Database:        postgres (admin user)"
+echo "Cache TTL:       $VALKEY_TTL seconds"
+echo "Query Type:      $QUERY_TYPE"
+echo "============================================================"
 echo ""
 
-echo "[INSTALL] Installing Python dependencies..."
+echo "[DEPENDENCIES] Installing required packages..."
+echo "[INSTALL] Python packages: redis, psycopg2-binary, boto3"
 python3 -m pip install --user redis psycopg2-binary boto3 --quiet
-echo "[OK] Dependencies installed"
+echo "[OK] Python dependencies installed"
+echo ""
+
+echo "[DEPENDENCIES] Setting environment variables for Python scripts..."
+export AWS_REGION
+export DSQL_ENDPOINT
+export VALKEY_ENDPOINT
+export VALKEY_TTL
+export QUERY
+echo "[OK] Environment variables exported"
 echo ""
 
 # Setup database based on query type
