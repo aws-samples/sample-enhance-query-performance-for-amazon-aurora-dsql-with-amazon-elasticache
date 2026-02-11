@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-Region DSQL Witness (us-east-2) - Minimal infrastructure for witness functionality only'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment name for resource tagging'
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  # Cluster ARNs (for reference and tagging)
+  EastClusterArn:
+    Type: String
+    Default: ''
+    Description: 'ARN of the us-east-1 cluster (for reference)'
+
+  WestClusterArn:
+    Type: String
+    Default: ''
+    Description: 'ARN of the us-west-2 cluster (for reference)'
+
+Resources:
+  # Note: For DSQL witness functionality, AWS manages the witness infrastructure
+  # No explicit resources need to be created in the witness region
+  # This template exists primarily for documentation and deployment tracking
+
+  # CloudWatch Log Group for witness region monitoring (optional)
+  WitnessLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Sub '/aws/dsql/witness/${Environment}'
+      RetentionInDays: 7
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-dsql-witness-logs'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'DSQL-Multi-Region-Witness'
+        - Key: Region
+          Value: 'us-east-2'
+
+  # Simple marker resource for witness deployment tracking
+  WitnessDeploymentMarker:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+    Properties: {}
+
+Outputs:
+  # Witness region confirmation
+  WitnessRegion:
+    Description: 'Confirmed witness region'
+    Value: 'us-east-2'
+    Export:
+      Name: !Sub '${AWS::StackName}-WitnessRegion'
+
+  WitnessStatus:
+    Description: 'Witness deployment status'
+    Value: 'Ready for multi-region DSQL setup'
+    Export:
+      Name: !Sub '${AWS::StackName}-WitnessStatus'
+
+  # Reference information
+  ClusterRegions:
+    Description: 'Cluster regions for this multi-region setup'
+    Value: 'us-east-1, us-west-2'
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterRegions'
+
+  ClusterRole:
+    Description: 'Role in multi-region setup'
+    Value: 'Witness-Region'
+    Export:
+      Name: !Sub '${AWS::StackName}-Role-Witness'
+
+  # Instructions
+  WitnessInstructions:
+    Description: 'Information about witness region'
+    Value: |
+      This is the witness region for the multi-region DSQL setup.
+      AWS manages the witness infrastructure automatically.
+      
+      DSQL clusters:
+      - us-east-1: Cluster with ElastiCache
+      - us-west-2: Cluster with ElastiCache
+      - us-east-2: Witness (this region)
+      
+      The witness region helps maintain cluster consistency and quorum
+      for the multi-region DSQL configuration.
+    Export:
+      Name: !Sub '${AWS::StackName}-WitnessInstructions'

@@ -1,0 +1,632 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-Region DSQL Cluster (us-east-1) - VPC Infrastructure + DSQL Cluster + ElastiCache'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment name for resource tagging'
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+  
+  VpcCidr:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for the VPC'
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: 'Must be a valid IP CIDR range of the form x.x.x.x/x'
+
+  PublicSubnet1Cidr:
+    Type: String
+    Default: '10.0.0.0/20'
+    Description: 'CIDR block for public subnet 1'
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: 'Must be a valid IP CIDR range of the form x.x.x.x/x'
+
+  PublicSubnet2Cidr:
+    Type: String
+    Default: '10.0.16.0/20'
+    Description: 'CIDR block for public subnet 2'
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: 'Must be a valid IP CIDR range of the form x.x.x.x/x'
+
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: '10.0.128.0/20'
+    Description: 'CIDR block for private subnet 1'
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: 'Must be a valid IP CIDR range of the form x.x.x.x/x'
+
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: '10.0.144.0/20'
+    Description: 'CIDR block for private subnet 2'
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,2})/(\d{1,2})'
+    ConstraintDescription: 'Must be a valid IP CIDR range of the form x.x.x.x/x'
+
+  # Valkey Cluster Parameters
+  ValkeyClusterName:
+    Type: String
+    Default: 'valkey-cluster'
+    Description: 'Name for the Valkey serverless cluster'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9-]*'
+    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters and hyphens'
+
+  ValkeyEngine:
+    Type: String
+    Default: 'valkey'
+    Description: 'Engine type for the cache cluster'
+    AllowedValues:
+      - valkey
+
+  ValkeyEngineVersion:
+    Type: String
+    Default: '8'
+    Description: 'Engine version for Valkey'
+    AllowedValues:
+      - '8'
+      - '7'
+
+  ValkeyMaxDataStorage:
+    Type: Number
+    Default: 1
+    Description: 'Maximum data storage for the serverless cache (in GB)'
+    AllowedValues:
+      - 1
+      - 5
+      - 10
+      - 25
+      - 50
+      - 100
+      - 200
+      - 500
+      - 1000
+
+  ValkeyMaxECPU:
+    Type: Number
+    Default: 1000
+    Description: 'Maximum ECPU (Elastic Compute Processing Units) for the serverless cache'
+    AllowedValues:
+      - 1000
+      - 2500
+      - 5000
+      - 10000
+      - 15000
+      - 25000
+      - 50000
+
+  # DSQL Cluster Parameters
+  DSQLClusterName:
+    Type: String
+    Default: 'dsql-cluster'
+    Description: 'Name for the DSQL cluster'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9-]*'
+    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters and hyphens'
+
+  DSQLDeletionProtection:
+    Type: String
+    Default: 'false'
+    Description: 'Enable deletion protection for DSQL cluster'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  # Multi-region parameters
+  DeploymentPhase:
+    Type: String
+    Default: 'Initial'
+    Description: 'Deployment phase - Initial creates cluster, Linking connects to multi-region'
+    AllowedValues:
+      - 'Initial'
+      - 'Linking'
+
+  WestClusterArn:
+    Type: String
+    Default: ''
+    Description: 'ARN of the us-west-2 cluster (required for Linking phase)'
+
+Conditions:
+  IsLinkingPhase: !Equals [!Ref DeploymentPhase, 'Linking']
+  HasWestCluster: !Not [!Equals [!Ref WestClusterArn, '']]
+  CanConfigureMultiRegion: !And
+    - !Condition IsLinkingPhase
+    - !Condition HasWestCluster
+
+Resources:
+  # VPC
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: 'default'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-DSQL-ElastiCache-VPC-East'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Region
+          Value: 'us-east-1'
+        - Key: Purpose
+          Value: 'Multi-Region-DSQL-Cluster'
+
+  # Internet Gateway
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-DSQL-ElastiCache-IGW-East'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Attach Internet Gateway to VPC
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: 'us-east-1a'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-Public-Subnet-1a-East'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Type
+          Value: Public
+
+  PublicSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: 'us-east-1b'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-Public-Subnet-1b-East'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Type
+          Value: Public
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: 'us-east-1a'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-Private-Subnet-1a-East'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Type
+          Value: Private
+
+  PrivateSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: 'us-east-1b'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-Private-Subnet-1b-East'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Type
+          Value: Private
+
+  # Elastic IPs for NAT Gateways
+  NatGateway1EIP:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-NAT-Gateway-1-EIP-East'
+        - Key: Environment
+          Value: !Ref Environment
+
+  NatGateway2EIP:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-NAT-Gateway-2-EIP-East'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # NAT Gateways
+  NatGateway1:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-NAT-Gateway-1a-East'
+        - Key: Environment
+          Value: !Ref Environment
+
+  NatGateway2:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-NAT-Gateway-1b-East'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Route Tables
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-Public-Route-Table-East'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateRouteTable1:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-Private-Route-Table-1a-East'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateRouteTable2:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-Private-Route-Table-1b-East'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Routes
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PrivateRoute1:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateRoute2:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway2
+
+  # Route Table Associations
+  PublicSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  # Security Groups
+  DefaultSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Default security group for DSQL ElastiCache VPC (us-east-1)'
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow all outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-default-sg-east'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Self-referencing ingress rule for the security group
+  DefaultSecurityGroupIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref DefaultSecurityGroup
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref DefaultSecurityGroup
+      Description: 'Allow all traffic from resources in this security group'
+
+  # Valkey Security Group
+  ValkeySecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Security group for Valkey serverless cluster'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: 6379
+          ToPort: 6379
+          CidrIp: !Ref VpcCidr
+          Description: 'Allow Valkey access from VPC CIDR (includes CloudShell when configured for VPC access)'
+        - IpProtocol: 'tcp'
+          FromPort: 6380
+          ToPort: 6380
+          CidrIp: !Ref VpcCidr
+          Description: 'Allow Valkey TLS access from VPC CIDR (includes CloudShell when configured for VPC access)'
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow all outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-valkey-sg-east'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Valkey-ElastiCache-Security-Group'
+
+  # Valkey Subnet Group
+  ValkeySubnetGroup:
+    Type: 'AWS::ElastiCache::SubnetGroup'
+    Properties:
+      Description: 'Subnet group for Valkey serverless cluster'
+      CacheSubnetGroupName: !Sub '${Environment}-${ValkeyClusterName}-subnet-group-east'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-${ValkeyClusterName}-subnet-group-east'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Valkey Serverless Cache
+  ValkeyServerlessCache:
+    Type: 'AWS::ElastiCache::ServerlessCache'
+    Properties:
+      ServerlessCacheName: !Sub 
+        - '${StackName}-${RandomSuffix}'
+        - StackName: !Ref 'AWS::StackName'
+          RandomSuffix: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
+      Description: !Sub 'Valkey ${ValkeyEngineVersion} serverless cluster for ${Environment} environment (us-east-1)'
+      Engine: !Ref ValkeyEngine
+      MajorEngineVersion: !Ref ValkeyEngineVersion
+      CacheUsageLimits:
+        DataStorage:
+          Maximum: !Ref ValkeyMaxDataStorage
+          Unit: GB
+        ECPUPerSecond:
+          Maximum: !Ref ValkeyMaxECPU
+      DailySnapshotTime: '03:00'
+      SecurityGroupIds:
+        - !Ref ValkeySecurityGroup
+      SnapshotRetentionLimit: 1
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-${ValkeyClusterName}-east'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Engine
+          Value: !Ref ValkeyEngine
+        - Key: Version
+          Value: !Ref ValkeyEngineVersion
+
+  # DSQL Security Group
+  DSQLSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Security group for DSQL cluster (us-east-1)'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !Ref VpcCidr
+          Description: 'Allow DSQL access from VPC CIDR (includes CloudShell when configured for VPC access)'
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow all outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-dsql-sg-east'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'DSQL-Database-Security-Group'
+
+  # DSQL Multi-Region Cluster (Primary in us-east-1)
+  DSQLCluster:
+    Type: 'AWS::DSQL::Cluster'
+    Properties:
+      DeletionProtectionEnabled: !Ref DSQLDeletionProtection
+      
+      # Multi-region properties (always set witness region, add clusters when linking)
+      MultiRegionProperties:
+        WitnessRegion: 'us-east-2'
+        Clusters: !If
+          - CanConfigureMultiRegion
+          - - !Ref WestClusterArn
+          - !Ref 'AWS::NoValue'
+      
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-${DSQLClusterName}-east'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Type
+          Value: 'Multi-Region-Cluster'
+        - Key: Region
+          Value: 'us-east-1'
+        - Key: Phase
+          Value: !Ref DeploymentPhase
+        - Key: WitnessRegion
+          Value: 'us-east-2'
+
+Outputs:
+  # VPC Infrastructure Outputs
+  VPCId:
+    Description: 'VPC ID (us-east-1)'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID-East'
+
+  VPCCidr:
+    Description: 'VPC CIDR Block (us-east-1)'
+    Value: !Ref VpcCidr
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-CIDR-East'
+
+  # Valkey Outputs
+  ValkeyServerlessCacheName:
+    Description: 'Valkey Serverless Cache Name'
+    Value: !Ref ValkeyServerlessCache
+    Export:
+      Name: !Sub '${AWS::StackName}-Valkey-CacheName'
+
+  ValkeyEndpoint:
+    Description: 'Valkey Serverless Cache Endpoint'
+    Value: !GetAtt ValkeyServerlessCache.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-Valkey-Endpoint'
+
+  ValkeyFullEndpoint:
+    Description: 'Valkey Serverless Cache Full Endpoint (host:port)'
+    Value: !Sub 
+      - '${Host}:${Port}'
+      - Host: !GetAtt ValkeyServerlessCache.Endpoint.Address
+        Port: !GetAtt ValkeyServerlessCache.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-Valkey-FullEndpoint'
+
+  ValkeySecurityGroupId:
+    Description: 'Valkey Security Group ID'
+    Value: !Ref ValkeySecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Valkey-SG-ID'
+
+  ValkeySubnetGroupName:
+    Description: 'Valkey Subnet Group Name'
+    Value: !Ref ValkeySubnetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Valkey-SubnetGroup'
+
+  # Private Subnet Outputs
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID (us-east-1a)'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID (us-east-1b)'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+
+  PrivateSubnetIds:
+    Description: 'Comma-separated list of private subnet IDs'
+    Value: !Sub '${PrivateSubnet1},${PrivateSubnet2}'
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnets-IDs'
+
+  # DSQL Outputs
+  DSQLClusterIdentifier:
+    Description: 'DSQL Cluster Identifier (us-east-1)'
+    Value: !Ref DSQLCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-DSQL-ClusterID-East'
+
+  DSQLClusterArn:
+    Description: 'DSQL Cluster ARN (needed for us-west-2 linking)'
+    Value: !GetAtt DSQLCluster.ResourceArn
+    Export:
+      Name: !Sub '${AWS::StackName}-DSQL-ClusterArn-East'
+
+  DSQLClusterEndpoint:
+    Description: 'DSQL Cluster Endpoint (us-east-1)'
+    Value: !Sub '${DSQLCluster}.dsql.us-east-1.on.aws'
+    Export:
+      Name: !Sub '${AWS::StackName}-DSQL-Endpoint-East'
+
+  DSQLSecurityGroupId:
+    Description: 'DSQL Security Group ID'
+    Value: !Ref DSQLSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DSQL-SG-ID'
+
+  # Multi-region status
+  DeploymentPhase:
+    Description: 'Current deployment phase'
+    Value: !Ref DeploymentPhase
+    Export:
+      Name: !Sub '${AWS::StackName}-Phase-East'
+
+  ClusterRole:
+    Description: 'Role in multi-region setup'
+    Value: 'East-Cluster-with-ElastiCache'
+    Export:
+      Name: !Sub '${AWS::StackName}-Role-East'
+
+  # Next steps instructions
+  NextSteps:
+    Description: 'Instructions for multi-region setup'
+    Value: !If
+      - CanConfigureMultiRegion
+      - 'Multi-region setup complete! DSQL cluster linked with us-west-2 and witness in us-east-2'
+      - !Sub |
+        NEXT STEPS for Multi-Region Setup:
+        1. Deploy us-west-2 template with this cluster ARN: ${DSQLCluster.ResourceArn}
+        2. Deploy us-east-2 witness template  
+        3. Update both cluster regions with DeploymentPhase=Linking
+        
+        ElastiCache endpoint: ${ValkeyServerlessCache.Endpoint.Address}
+    Export:
+      Name: !Sub '${AWS::StackName}-NextSteps-East'
