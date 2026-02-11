@@ -10,6 +10,37 @@ echo "=============================================="
 echo "Environment: AWS CloudShell"
 echo ""
 
+# Check if environment variables are already set (from CloudFormation or manual export)
+if [[ -n "$AWS_REGION" && -n "$DSQL_ENDPOINT" && -n "$VALKEY_ENDPOINT" ]]; then
+    echo "[DETECTED] Environment variables already set:"
+    echo "  AWS_REGION: $AWS_REGION"
+    echo "  DSQL_ENDPOINT: $DSQL_ENDPOINT"
+    echo "  VALKEY_ENDPOINT: $VALKEY_ENDPOINT"
+    echo ""
+    read -p "Use these values? (y/n): " use_existing
+    if [[ "$use_existing" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        SKIP_INPUT=true
+    else
+        SKIP_INPUT=false
+    fi
+else
+    SKIP_INPUT=false
+    echo "[INFO] Environment variables not detected. You can set them with:"
+    echo ""
+    echo "  export AWS_REGION='your-region'"
+    echo "  export DSQL_ENDPOINT='your-dsql-endpoint'"
+    echo "  export VALKEY_ENDPOINT='your-valkey-endpoint'"
+    echo ""
+    echo "Or retrieve them from CloudFormation:"
+    echo ""
+    echo "  export AWS_REGION='us-east-1'"
+    echo "  export DSQL_ENDPOINT=\$(aws cloudformation describe-stacks --stack-name dsql-multi-region --region us-east-1 --query 'Stacks[0].Outputs[?OutputKey==\`DSQLClusterEndpoint\`].OutputValue' --output text)"
+    echo "  export VALKEY_ENDPOINT=\$(aws cloudformation describe-stacks --stack-name dsql-multi-region --region us-east-1 --query 'Stacks[0].Outputs[?OutputKey==\`ValkeyEndpoint\`].OutputValue' --output text)"
+    echo ""
+    echo "Proceeding with interactive setup..."
+    echo ""
+fi
+
 # Function to get user inputs
 get_user_inputs() {
     echo "============================================================"
@@ -126,13 +157,52 @@ get_user_inputs() {
     done
 }
 
-# Get user inputs
-get_user_inputs
+# Get user inputs (skip if environment variables already set)
+if [[ "$SKIP_INPUT" != true ]]; then
+    get_user_inputs
+    
+    # Set environment variables from user inputs
+    export DSQL_ENDPOINT
+    export VALKEY_ENDPOINT
+    export AWS_REGION
+else
+    # Still need to get query type
+    while true; do
+        echo "============================================================"
+        echo "Choose execution type:"
+        echo "============================================================"
+        echo ""
+        echo "1. SIMPLE EXECUTION"
+        echo "   - Tests basic query: SELECT * FROM users1"
+        echo "   - Automatically sets up users1 table"
+        echo "   - Quick demo, minimal setup required"
+        echo ""
+        echo "2. COMPLEX EXECUTION"
+        echo "   - Tests complex query with joins and aggregations"
+        echo "   - Automatically sets up users and orders tables"
+        echo "   - Demonstrates real-world caching benefits"
+        echo ""
+        read -p "Enter your choice (1 or 2): " QUERY_CHOICE
+        QUERY_CHOICE=$(echo "$QUERY_CHOICE" | xargs)
+        
+        if [[ "$QUERY_CHOICE" == "1" ]]; then
+            QUERY_TYPE="simple"
+            QUERY="SELECT * FROM users1;"
+            echo ""
+            echo "[SELECTED] Simple execution"
+            break
+        elif [[ "$QUERY_CHOICE" == "2" ]]; then
+            QUERY_TYPE="complex"
+            QUERY="SELECT u.user_id, u.name, u.email, u.department, u.role, u.last_login, COUNT(DISTINCT o.order_date) as active_days, COUNT(o.order_id) as recent_orders, COALESCE(SUM(o.order_amount), 0) as recent_spending, COALESCE(AVG(o.order_amount), 0) as avg_order_size, STRING_AGG(DISTINCT o.order_type, ', ') as order_types FROM users u LEFT JOIN orders o ON u.user_id = o.user_id AND o.order_date >= CURRENT_DATE - INTERVAL '30 days' WHERE u.user_id = 1 GROUP BY u.user_id, u.name, u.email, u.department, u.role, u.last_login;"
+            echo ""
+            echo "[SELECTED] Complex execution"
+            break
+        else
+            echo "[ERROR] Invalid choice. Please enter 1 or 2."
+        fi
+    done
+fi
 
-# Set environment variables from user inputs
-export DSQL_ENDPOINT
-export VALKEY_ENDPOINT
-export AWS_REGION
 export VALKEY_TTL="30"
 export QUERY
 
