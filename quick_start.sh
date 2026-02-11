@@ -153,12 +153,11 @@ echo ""
 # Setup database based on query type
 if [[ "$QUERY_TYPE" == "simple" ]]; then
     echo "[DATABASE] Setting up users1 table for simple execution..."
-    python3 setup_database.py
+    python3 setup_database.py "$DSQL_ENDPOINT" "simple"
     echo ""
 elif [[ "$QUERY_TYPE" == "complex" ]]; then
-    echo "[DATABASE] Complex execution requires users and orders tables"
-    echo "[INFO] Ensure these tables exist before proceeding"
-    read -p "Press Enter to continue or Ctrl+C to cancel..."
+    echo "[DATABASE] Setting up users and orders tables for complex execution..."
+    python3 setup_database.py "$DSQL_ENDPOINT" "complex"
     echo ""
 fi
 
@@ -255,13 +254,6 @@ echo ""
 echo "Run 3 - DSQL Optimized (Connection Pool):"
 echo "  Cache Miss:  ${RUN3_DSQL}ms (DSQL compute optimized + pooled connections)"
 echo "  Cache Hits:  ${RUN3_CACHE}ms (consistent ElastiCache performance)"
-echo ""
-echo "Database Insights:"
-echo "  ✓ DSQL scaling: ${RUN1_DSQL}ms → ${RUN3_DSQL}ms ($(python3 -c "print(f'{${RUN1_DSQL}/${RUN3_DSQL}:.0f}x')")improvement with connection pooling)"
-echo "  ✓ DSQL variability: Cold starts can be unpredictable (100-300ms+)"
-echo "  ✓ Connection pooling: Essential for DSQL to minimize overhead"
-echo "  ✓ Caching strategy: Eliminates DSQL variability with consistent 1-2ms response"
-echo "  ✓ Best practice: Cache + connection pooling = predictable DSQL performance"
 echo "============================================================"
 echo ""
 echo "[INFO] To run individual tests:"
