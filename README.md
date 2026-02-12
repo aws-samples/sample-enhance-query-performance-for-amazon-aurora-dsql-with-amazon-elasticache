@@ -187,21 +187,21 @@ The quick start script will execute the following:
 5. **Load Test Data**: Creates 500 users and 2,500 orders (5 orders per user average, 2-3 minute setup)
 6. **Initialize Connection Pool**: Creates Amazon Aurora DSQL connection pool (min=5, max=30 connections)
 7. **First Performance Test (Amazon Aurora DSQL Cold Start)**:
-   - **Iteration 1**: Cache miss → Amazon Aurora DSQL query (~200-300ms compute initialization) → Cache hydration
-   - **Iterations 2-10**: Cache hits → Amazon ElastiCache retrieval (~2ms) using pooled connections
+   - **Iteration 1**: Cache miss → Amazon Aurora DSQL query (compute initialization) → Cache hydration
+   - **Iterations 2-10**: Cache hits → Amazon ElastiCache retrieval using pooled connections
 8. **Second Performance Test (Amazon Aurora DSQL Warm)**:
-   - **Iteration 1**: Cache miss → Amazon Aurora DSQL query (~8-15ms scaled compute) → Cache hydration  
-   - **Iterations 2-10**: Cache hits → Amazon ElastiCache retrieval (~2ms) using pooled connections
+   - **Iteration 1**: Cache miss → Amazon Aurora DSQL query (scaled compute) → Cache hydration  
+   - **Iterations 2-10**: Cache hits → Amazon ElastiCache retrieval using pooled connections
 9. **Third Performance Test (Connection Pool Optimized)**:
-   - **Iteration 1**: Cache miss → Amazon Aurora DSQL query (~5-10ms optimized connections) → Cache hydration
-   - **Iterations 2-10**: Cache hits → Amazon ElastiCache retrieval (~2ms) using pooled connections
+   - **Iteration 1**: Cache miss → Amazon Aurora DSQL query (optimized connections) → Cache hydration
+   - **Iterations 2-10**: Cache hits → Amazon ElastiCache retrieval using pooled connections
 10. **Comprehensive Analysis**: Shows three-way performance comparison:
-   - **Amazon Aurora DSQL Cold**: 200-300ms (compute scaling variability)
-   - **Amazon Aurora DSQL Warm**: 8-15ms (consistent scaled performance)
-   - **Amazon Aurora DSQL Optimized**: 5-10ms (connection pool benefits)
-   - **Cache**: ~2ms (predictable performance regardless of Amazon Aurora DSQL state)
+   - **Amazon Aurora DSQL Cold**: Compute scaling variability
+   - **Amazon Aurora DSQL Warm**: Consistent scaled performance
+   - **Amazon Aurora DSQL Optimized**: Connection pool benefits
+   - **Cache**: Predictable performance regardless of Amazon Aurora DSQL state
 
-The demo demonstrates how Amazon ElastiCache eliminates Amazon Aurora DSQL compute variability while connection pooling progressively optimizes resource usage. Users get consistent ~2ms response times whether Amazon Aurora DSQL is experiencing cold starts, running with scaled compute, or fully optimized with connection pooling.
+The demo demonstrates how Amazon ElastiCache eliminates Amazon Aurora DSQL compute variability while connection pooling progressively optimizes resource usage. Users get consistent cache response times whether Amazon Aurora DSQL is experiencing cold starts, running with scaled compute, or fully optimized with connection pooling.
 
 ## Verification & Troubleshooting
 
