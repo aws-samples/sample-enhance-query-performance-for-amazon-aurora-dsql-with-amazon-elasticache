@@ -1,6 +1,6 @@
 # Amazon Aurora DSQL + Amazon ElastiCache Performance Demo
 
-This demo showcases the performance benefits of using Amazon ElastiCache (Valkey) as a caching layer in front of Amazon Aurora DSQL (PostgreSQL-compatible distributed database).
+This demo showcases the performance benefits of using Amazon ElastiCache (Valkey) as a caching layer in front of Amazon Aurora DSQL, a PostgreSQL-compatible distributed database.
 
 ## Architecture
 
