@@ -1,0 +1,6 @@
+# Map automated/bot commits to a single identity
+# This helps consolidate contributor attribution
+
+# Hide warp-agent commits by mapping to Amazon automation
+Amazon GitHub Automation <54958958+amazon-auto@users.noreply.github.com> warp-agent <warp-agent@users.noreply.github.com>
+Amazon GitHub Automation <54958958+amazon-auto@users.noreply.github.com> <warp-agent@users.noreply.github.com>
